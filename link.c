@@ -181,9 +181,16 @@ HgfsReadlink(struct dentry *dentry,  // IN:  Dentry containing link
                  "on something that wasn't a symlink\n"));
          error = -EINVAL;
       } else {
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(3, 14, 99)
          LOG(6, (KERN_DEBUG "VMware hgfs: HgfsReadlink: calling "
                  "vfs_readlink\n"));
          error = vfs_readlink(dentry, buffer, buflen, fileName);
+#else
+         LOG(6, (KERN_DEBUG "VMware hgfs: HgfsReadlink: calling "
+                  "readlink_copy\n"));
+         error = readlink_copy(buffer, buflen, fileName);
+#endif
+
       }
       kfree(fileName);
    }

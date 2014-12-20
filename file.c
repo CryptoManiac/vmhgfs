@@ -150,15 +150,19 @@ struct file_operations HgfsFileFileOperations = {
    .open       = HgfsOpen,
    .llseek     = HgfsSeek,
    .flush      = HgfsFlush,
-#if defined VMW_USE_AIO
+#ifdef VMW_USE_AIO
    .read       = do_sync_read,
    .write      = do_sync_write,
    .aio_read   = HgfsAioRead,
    .aio_write  = HgfsAioWrite,
-#else
+#else /* !VMW_USE_AIO */
+#  if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
+   .read_iter = generic_file_read_iter,
+   .write_iter = generic_file_write_iter,
+# endif
    .read       = HgfsRead,
    .write      = HgfsWrite,
-#endif
+#endif /* !VMW_USE_AIO */
    .fsync      = HgfsFsync,
    .mmap       = HgfsMmap,
    .release    = HgfsRelease,
@@ -793,7 +797,6 @@ HgfsAioRead(struct kiocb *iocb,      // IN:  I/O control block
    return result;
 }
 
-
 /*
  *----------------------------------------------------------------------
  *
@@ -927,7 +930,11 @@ HgfsRead(struct file *file,  // IN:  File to read from
       goto out;
    }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
+   result = new_sync_read(file, buf, count, offset);
+#else
    result = generic_file_read(file, buf, count, offset);
+#endif
   out:
    return result;
 }
@@ -978,7 +985,11 @@ HgfsWrite(struct file *file,      // IN: File to write to
       goto out;
    }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
+   result = new_sync_write(file, buf, count, offset);
+#else
    result = generic_file_write(file, buf, count, offset);
+#endif
   out:
    return result;
 }

@@ -250,6 +250,7 @@ void WarningThrottled(uint32 *count, const char *fmt, ...)
 
 #define LOG_ONCE(_s) DO_ONCE(Log _s)
 
+/*
 #ifdef VMX86_DEVEL
    #define DEPRECATED(_fix) DO_ONCE(                                     \
                                Warning("%s:%d: %s is DEPRECATED. %s\n",  \
@@ -258,7 +259,7 @@ void WarningThrottled(uint32 *count, const char *fmt, ...)
 #else
    #define DEPRECATED(_fix) do {} while (0)
 #endif
-
+*/
 
 /*
  * Redefine macros that are only in debug versions
