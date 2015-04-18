@@ -1391,10 +1391,16 @@ int
 HgfsWbRequestWait(HgfsWbPage *req)  // IN: request of page data to write
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 13)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 17, 0)
    return wait_on_bit(&req->wb_flags,
                       PG_BUSY,
                       HgfsWbRequestWaitUninterruptible,
                       TASK_UNINTERRUPTIBLE);
+#else
+   return wait_on_bit(&req->wb_flags,
+                      PG_BUSY,
+                      TASK_UNINTERRUPTIBLE);
+#endif
 #else
    wait_event(req->wb_queue,
               !test_bit(PG_BUSY, &req->wb_flags));
