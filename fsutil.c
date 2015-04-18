@@ -1939,7 +1939,12 @@ HgfsCreateFileInfo(struct file *file,  // IN: File pointer to attach to
 
    ASSERT(file);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    inodeInfo = INODE_GET_II_P(file->f_dentry->d_inode);
+#else
+   inodeInfo = INODE_GET_II_P(file->f_path.dentry->d_inode);
+#endif
+
    ASSERT(inodeInfo);
 
    /* Get the mode of the opened file. */
