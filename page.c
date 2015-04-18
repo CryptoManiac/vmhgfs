@@ -1450,9 +1450,17 @@ HgfsWbRequestUnlock(HgfsWbPage *req)  // IN: request of page data to write
       LOG(6, (KERN_WARNING "VMware Hgfs: %s: Invalid unlock attempted\n", __func__));
       return;
    }
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 18, 0)
    smp_mb__before_clear_bit();
+#else
+   smp_mb__before_atomic();
+#endif
    clear_bit(PG_BUSY, &req->wb_flags);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 18, 0)
    smp_mb__after_clear_bit();
+#else
+   smp_mb__after_atomic();
+#endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 13)
    wake_up_bit(&req->wb_flags, PG_BUSY);
 #else
