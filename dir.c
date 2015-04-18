@@ -413,11 +413,19 @@ HgfsPackDirOpenRequest(struct file *file,   // IN: File pointer for this open
    }
 
    /* Build full name to send to server. */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    if (HgfsBuildPath(name, req->bufferSize - (requestSize - 1),
                      file->f_dentry) < 0) {
       LOG(4, (KERN_DEBUG "VMware hgfs: HgfsPackDirOpenRequest: build path failed\n"));
       return -EINVAL;
    }
+#else
+   if (HgfsBuildPath(name, req->bufferSize - (requestSize - 1),
+                     file->f_path.dentry) < 0) {
+      LOG(4, (KERN_DEBUG "VMware hgfs: HgfsPackDirOpenRequest: build path failed\n"));
+      return -EINVAL;
+   }
+#endif
    LOG(4, (KERN_DEBUG "VMware hgfs: HgfsPackDirOpenRequest: opening \"%s\"\n",
            name));
 
@@ -704,7 +712,11 @@ HgfsDirLlseek(struct file *file,
               loff_t offset,
               int origin)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    struct dentry *dentry = file->f_dentry;
+#else
+   struct dentry *dentry = file->f_path.dentry;
+#endif
    struct inode *inode = dentry->d_inode;
    compat_mutex_t *mtx;
 
@@ -990,7 +1002,11 @@ HgfsReaddirNextEntry(struct file *file,              // IN: file
 
    ASSERT(file->f_dentry->d_inode->i_sb);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    si = HGFS_SB_TO_COMMON(file->f_dentry->d_inode->i_sb);
+#else
+   si = HGFS_SB_TO_COMMON(file->f_path.dentry->d_inode->i_sb);
+#endif
    *entryIgnore = FALSE;
 
    /*
@@ -1079,18 +1095,30 @@ HgfsReaddirNextEntry(struct file *file,              // IN: file
     */
    if (!strncmp(entryName, ".", sizeof ".")) {
       if (!dotAndDotDotIgnore) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
          *entryIno = file->f_dentry->d_inode->i_ino;
+#else
+         *entryIno = file->f_path.dentry->d_inode->i_ino;
+#endif
       } else {
          *entryIgnore = TRUE;
       }
    } else if (!strncmp(entryName, "..", sizeof "..")) {
       if (!dotAndDotDotIgnore) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
          *entryIno = compat_parent_ino(file->f_dentry);
+#else
+         *entryIno = compat_parent_ino(file->f_path.dentry);
+#endif
       } else {
          *entryIgnore = TRUE;
       }
    } else {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
      *entryIno = HgfsGetFileInode(&entryAttrs, file->f_dentry->d_inode->i_sb);
+#else
+     *entryIno = HgfsGetFileInode(&entryAttrs, file->f_path.dentry->d_inode->i_sb);
+#endif
    }
 
    if (*entryIgnore) {
@@ -1169,13 +1197,21 @@ HgfsDoReaddir(struct file *file,         // IN:
    ASSERT(file);
    ASSERT(filldirCtx);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    if (!file ||
       !(file->f_dentry) ||
       !(file->f_dentry->d_inode)) {
       LOG(4, (KERN_DEBUG "VMware hgfs: HgfsReaddir: null input\n"));
       return -EFAULT;
    }
-
+#else
+   if (!file ||
+      !(file->f_path.dentry) ||
+      !(file->f_path.dentry->d_inode)) {
+      LOG(4, (KERN_DEBUG "VMware hgfs: HgfsReaddir: null input\n"));
+      return -EFAULT;
+   }
+#endif
    LOG(4, (KERN_DEBUG "VMware hgfs: %s(%s, inum %lu, pos %Lu)\n",
           __func__,
           file->f_dentry->d_name.name,
