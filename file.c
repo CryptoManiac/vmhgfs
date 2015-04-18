@@ -360,6 +360,7 @@ HgfsPackOpenRequest(struct inode *inode, // IN: Inode of the file to open
    }
 
    /* Build full name to send to server. */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    if (HgfsBuildPath(name,
                      req->bufferSize - (requestSize - 1),
                      file->f_dentry) < 0) {
@@ -367,6 +368,15 @@ HgfsPackOpenRequest(struct inode *inode, // IN: Inode of the file to open
               "failed\n"));
       return -EINVAL;
    }
+#else
+   if (HgfsBuildPath(name,
+                     req->bufferSize - (requestSize - 1),
+                     file->f_path.dentry) < 0) {
+      LOG(4, (KERN_DEBUG "VMware hgfs: HgfsPackOpenRequest: build path "
+              "failed\n"));
+      return -EINVAL;
+   }
+#endif
    LOG(6, (KERN_DEBUG "VMware hgfs: HgfsPackOpenRequest: opening \"%s\", "
            "flags %o, create perms %o\n", name,
            file->f_flags, file->f_mode));
@@ -589,9 +599,13 @@ HgfsOpen(struct inode *inode,  // IN: Inode of the file to open
    ASSERT(inode);
    ASSERT(inode->i_sb);
    ASSERT(file);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    ASSERT(file->f_dentry);
    ASSERT(file->f_dentry->d_inode);
-
+#else
+   ASSERT(file->f_path.dentry);
+   ASSERT(file->f_path.dentry->d_inode);
+#endif
    iinfo = INODE_GET_II_P(inode);
 
    req = HgfsGetNewRequest();
@@ -667,8 +681,11 @@ HgfsOpen(struct inode *inode,  // IN: Inode of the file to open
              * This is not the root of our file system so there should always
              * be a parent.
              */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
             ASSERT(file->f_dentry->d_parent);
-
+#else
+            ASSERT(file->f_path.dentry->d_parent);
+#endif
             /*
              * Here we obtain a reference on the parent to make sure it doesn't
              * go away.  This might not be necessary, since the existence of
@@ -682,11 +699,19 @@ HgfsOpen(struct inode *inode,  // IN: Inode of the file to open
              * We could do this if we were willing to give up support for
              * O_EXCL on 2.4 kernels.
              */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
             dparent = dget(file->f_dentry->d_parent);
             iparent = dparent->d_inode;
 
             HgfsSetUidGid(iparent, file->f_dentry,
                           current_fsuid(), current_fsgid());
+#else
+            dparent = dget(file->f_path.dentry->d_parent);
+            iparent = dparent->d_inode;
+
+            HgfsSetUidGid(iparent, file->f_path.dentry,
+                          current_fsuid(), current_fsgid());
+#endif
 
             dput(dparent);
          }
@@ -745,7 +770,11 @@ out:
     * forcing a revalidate on one will not force it on any others.
     */
    if (result != 0 && iinfo->createdAndUnopened == TRUE) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
       HgfsDentryAgeForce(file->f_dentry);
+#else
+      HgfsDentryAgeForce(file->f_path.dentry);
+#endif
    }
    return result;
 }
@@ -781,12 +810,20 @@ HgfsAioRead(struct kiocb *iocb,      // IN:  I/O control block
 
    ASSERT(iocb);
    ASSERT(iocb->ki_filp);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    ASSERT(iocb->ki_filp->f_dentry);
+#else
+   ASSERT(iocb->ki_filp->f_path.dentry);
+#endif
    ASSERT(iov);
 
    LOG(6, (KERN_DEBUG "VMware hgfs: HgfsAioRead: was called\n"));
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    result = HgfsRevalidate(iocb->ki_filp->f_dentry);
+#else
+   result = HgfsRevalidate(iocb->ki_filp->f_path.dentry);
+#endif
    if (result) {
       LOG(4, (KERN_DEBUG "VMware hgfs: HgfsAioRead: invalid dentry\n"));
       goto out;
@@ -831,10 +868,18 @@ HgfsAioWrite(struct kiocb *iocb,      // IN:  I/O control block
 
    ASSERT(iocb);
    ASSERT(iocb->ki_filp);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    ASSERT(iocb->ki_filp->f_dentry);
+#else
+   ASSERT(iocb->ki_filp->f_path.dentry);
+#endif
    ASSERT(iov);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    writeDentry = iocb->ki_filp->f_dentry;
+#else
+   writeDentry = iocb->ki_filp->f_path.dentry;
+#endif
    iinfo = INODE_GET_II_P(writeDentry->d_inode);
 
    LOG(4, (KERN_DEBUG "VMware hgfs: %s(%s/%s, %lu@%Ld)\n",
@@ -917,14 +962,23 @@ HgfsRead(struct file *file,  // IN:  File to read from
    int result;
 
    ASSERT(file);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    ASSERT(file->f_dentry);
+#else
+   ASSERT(file->f_path.dentry);
+#endif
    ASSERT(buf);
    ASSERT(offset);
 
    LOG(6, (KERN_DEBUG "VMware hgfs: HgfsRead: read %Zu bytes from fh %u "
            "at offset %Lu\n", count, FILE_GET_FI_P(file)->handle, *offset));
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    result = HgfsRevalidate(file->f_dentry);
+#else
+   result = HgfsRevalidate(file->f_path.dentry);
+#endif
+
    if (result) {
       LOG(4, (KERN_DEBUG "VMware hgfs: HgfsRead: invalid dentry\n"));
       goto out;
@@ -971,15 +1025,24 @@ HgfsWrite(struct file *file,      // IN: File to write to
    int result;
 
    ASSERT(file);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    ASSERT(file->f_dentry);
    ASSERT(file->f_dentry->d_inode);
+#else
+   ASSERT(file->f_path.dentry);
+   ASSERT(file->f_path.dentry->d_inode);
+#endif
    ASSERT(buf);
    ASSERT(offset);
 
    LOG(6, (KERN_DEBUG "VMware hgfs: HgfsWrite: write %Zu bytes to fh %u "
            "at offset %Lu\n", count, FILE_GET_FI_P(file)->handle, *offset));
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    result = HgfsRevalidate(file->f_dentry);
+#else
+   result = HgfsRevalidate(file->f_path.dentry);
+#endif
    if (result) {
       LOG(4, (KERN_DEBUG "VMware hgfs: HgfsWrite: invalid dentry\n"));
       goto out;
@@ -1023,12 +1086,21 @@ HgfsSeek(struct file *file,  // IN:  File to seek
    loff_t result = -1;
 
    ASSERT(file);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
    ASSERT(file->f_dentry);
+#else
+   ASSERT(file->f_path.dentry);
+#endif
 
    LOG(6, (KERN_DEBUG "VMware hgfs: HgfsSeek: seek to %Lu bytes from fh %u "
            "from position %d\n", offset, FILE_GET_FI_P(file)->handle, origin));
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
    result = (loff_t) HgfsRevalidate(file->f_dentry);
+#else
+   result = (loff_t) HgfsRevalidate(file->f_path.dentry);
+#endif
+
    if (result) {
       LOG(6, (KERN_DEBUG "VMware hgfs: HgfsSeek: invalid dentry\n"));
       goto out;
@@ -1111,6 +1183,7 @@ HgfsFlush(struct file *file                        // IN: file to flush
 {
    int ret = 0;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    LOG(4, (KERN_DEBUG "VMware hgfs: %s(%s/%s)\n",
             __func__, file->f_dentry->d_parent->d_name.name,
             file->f_dentry->d_name.name));
@@ -1118,7 +1191,15 @@ HgfsFlush(struct file *file                        // IN: file to flush
    if ((file->f_mode & FMODE_WRITE) == 0) {
       goto exit;
    }
+#else
+   LOG(4, (KERN_DEBUG "VMware hgfs: %s(%s/%s)\n",
+            __func__, file->f_path.dentry->d_parent->d_name.name,
+            file->f_path.dentry->d_name.name));
 
+   if ((file->f_mode & FMODE_WRITE) == 0) {
+      goto exit;
+   }
+#endif
 
    /* Flush writes to the server and return any errors */
    LOG(6, (KERN_DEBUG "VMware hgfs: %s: calling vfs_sync ... \n",
@@ -1182,6 +1263,7 @@ HgfsFsync(struct file *file,		// IN: File we operate on
    endRange = MAX_INT64;
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    LOG(4, (KERN_DEBUG "VMware hgfs: %s(%s/%s, %lld, %lld, %d)\n",
            __func__,
            file->f_dentry->d_parent->d_name.name,
@@ -1191,6 +1273,18 @@ HgfsFsync(struct file *file,		// IN: File we operate on
 
    /* Flush writes to the server and return any errors */
    inode = file->f_dentry->d_inode;
+#else
+   LOG(4, (KERN_DEBUG "VMware hgfs: %s(%s/%s, %lld, %lld, %d)\n",
+           __func__,
+           file->f_path.dentry->d_parent->d_name.name,
+           file->f_path.dentry->d_name.name,
+           startRange, endRange,
+           datasync));
+
+   /* Flush writes to the server and return any errors */
+   inode = file->f_path.dentry->d_inode;
+#endif
+
 #if defined VMW_FSYNC_31
    ret = filemap_write_and_wait_range(inode->i_mapping, startRange, endRange);
 #else
@@ -1230,11 +1324,18 @@ HgfsMmap(struct file *file,		// IN: File we operate on
 
    ASSERT(file);
    ASSERT(vma);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    ASSERT(file->f_dentry);
-
+#else
+   ASSERT(file->f_path.dentry);
+#endif
    LOG(6, (KERN_DEBUG "VMware hgfs: HgfsMmap: was called\n"));
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    result = HgfsRevalidate(file->f_dentry);
+#else
+   result = HgfsRevalidate(file->f_path.dentry);
+#endif
    if (result) {
       LOG(4, (KERN_DEBUG "VMware hgfs: HgfsMmap: invalid dentry\n"));
       goto out;
@@ -1275,8 +1376,13 @@ HgfsRelease(struct inode *inode,  // IN: Inode that this file points to
 
    ASSERT(inode);
    ASSERT(file);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    ASSERT(file->f_dentry);
    ASSERT(file->f_dentry->d_sb);
+#else
+   ASSERT(file->f_path.dentry);
+   ASSERT(file->f_path.dentry->d_sb);
+#endif
 
    handle = FILE_GET_FI_P(file)->handle;
    LOG(6, (KERN_DEBUG "VMware hgfs: HgfsRelease: close fh %u\n", handle));
@@ -1405,14 +1511,23 @@ HgfsSendfile(struct file *file,    // IN: File to read from
    ssize_t result;
 
    ASSERT(file);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    ASSERT(file->f_dentry);
+#else
+   ASSERT(file->f_path.dentry);
+#endif
    ASSERT(target);
    ASSERT(offset);
    ASSERT(actor);
 
    LOG(6, (KERN_DEBUG "VMware hgfs: HgfsSendfile: was called\n"));
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    result = HgfsRevalidate(file->f_dentry);
+#else
+   result = HgfsRevalidate(file->f_path.dentry);
+#endif
+
    if (result) {
       LOG(4, (KERN_DEBUG "VMware hgfs: HgfsSendfile: invalid dentry\n"));
       goto out;
@@ -1459,11 +1574,20 @@ HgfsSpliceRead(struct file *file,            // IN: File to read from
    ssize_t result;
 
    ASSERT(file);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    ASSERT(file->f_dentry);
+#else
+   ASSERT(file->f_path.dentry);
+#endif
 
    LOG(6, (KERN_DEBUG "VMware hgfs: HgfsSpliceRead: was called\n"));
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    result = HgfsRevalidate(file->f_dentry);
+#else
+   result = HgfsRevalidate(file->f_path.dentry);
+#endif
+
    if (result) {
       LOG(4, (KERN_DEBUG "VMware hgfs: HgfsSpliceRead: invalid dentry\n"));
       goto out;
