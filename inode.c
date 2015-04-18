@@ -1900,7 +1900,11 @@ HgfsPermission(struct inode *inode,
                            p,
 #endif
                            &inode->i_dentry,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 18, 1)
                            d_alias) {
+#else
+                           d_u.d_alias) {
+#endif
          int dcount = compat_d_count(dentry);
          if (dcount) {
             LOG(4, ("Found %s %d \n", dentry->d_name.name, dcount));
@@ -1953,7 +1957,13 @@ HgfsPermission(struct inode *inode,
       /* Find a dentry with valid d_count. Refer bug 587879. */
       list_for_each(pos, &inode->i_dentry) {
          int dcount;
-         struct dentry *dentry = list_entry(pos, struct dentry, d_alias);
+         struct dentry *dentry = list_entry(pos, struct dentry,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 18, 1)
+                d_alias
+#else
+                d_u.d_alias
+#endif
+         );
          dcount = compat_d_count(dentry);
          if (dcount) {
             LOG(4, ("Found %s %d \n", (dentry)->d_name.name, dcount));
