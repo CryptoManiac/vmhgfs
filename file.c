@@ -1086,7 +1086,7 @@ HgfsSeek(struct file *file,  // IN:  File to seek
    loff_t result = -1;
 
    ASSERT(file);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    ASSERT(file->f_dentry);
 #else
    ASSERT(file->f_path.dentry);
@@ -1095,7 +1095,7 @@ HgfsSeek(struct file *file,  // IN:  File to seek
    LOG(6, (KERN_DEBUG "VMware hgfs: HgfsSeek: seek to %Lu bytes from fh %u "
            "from position %d\n", offset, FILE_GET_FI_P(file)->handle, origin));
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
    result = (loff_t) HgfsRevalidate(file->f_dentry);
 #else
    result = (loff_t) HgfsRevalidate(file->f_path.dentry);
